@@ -214,7 +214,6 @@ def process_jobs(client: TelegramClient, state: dict[str, Any]) -> None:
 
         client.send_document(job["chat_id"], output_path, caption="Processed PDF")
         job["status"] = "done"
-        job["attempts"] = int(job.get("attempts", 0))
         job["error"] = None
 
     state["jobs"] = state["jobs"][-500:]
