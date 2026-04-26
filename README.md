@@ -31,17 +31,17 @@ pip install -r requirements.txt
 ## Run once (for cron/systemd timer)
 
 ```bash
-python bot.py --token <BOT_TOKEN> --api-base http://127.0.0.1:8081
+python bot.py --token <BOT_TOKEN>
 ```
 
 ## Scheduled run with GitHub Actions (every 10 minutes)
 
 Workflow file: `.github/workflows/run-bot.yml`
 
-It runs on `ubuntu-latest` every 10 minutes, starts local `telegram-bot-api` (jakbin binary) on port `8081`, and then executes:
+It runs on `ubuntu-latest` every 10 minutes, starts local `telegram-bot-api` (jakbin Docker image) on port `8081`, and then executes:
 
 ```bash
-python bot.py --token <BOT_TOKEN> --api-base <TELEGRAM_API_BASE>
+python bot.py --token <BOT_TOKEN>
 ```
 
 ### GitHub Secrets to configure
@@ -52,7 +52,6 @@ Create these secrets:
 - `BOT_TOKEN` (required)
 - `API_ID` (required; used to start `jakbin/telegram-bot-api-binary` in workflow)
 - `API_HASH` (required; used to start `jakbin/telegram-bot-api-binary` in workflow)
-- `TELEGRAM_API_BASE` (optional, defaults to `http://localhost:8081`)
 
 ## Text-based renaming behavior
 

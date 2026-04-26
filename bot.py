@@ -39,7 +39,7 @@ def sanitize_name(raw: str, fallback: str = "file") -> str:
 
 
 class TelegramClient:
-    def __init__(self, token: str, api_base: str, timeout: int = 30):
+    def __init__(self, token: str, api_base: str = "http://localhost:8081", timeout: int = 30):
         self.token = token
         self.api_base = api_base.rstrip("/")
         self.timeout = timeout
@@ -217,8 +217,20 @@ def process_jobs(client: TelegramClient, state: dict[str, Any]) -> None:
     state["jobs"] = state["jobs"][-500:]
 
 
+def notify_pending_users(client: TelegramClient, state: dict[str, Any]) -> None:
+    pending_chat_ids: set[int] = {
+        int(job["chat_id"]) for job in state.get("jobs", []) if job.get("status") == "pending" and job.get("chat_id")
+    }
+    for chat_id in pending_chat_ids:
+        try:
+            client.send_message(chat_id, "hello i am working")
+        except Exception:
+            continue
+
+
 def run_once(client: TelegramClient) -> None:
     state = load_state()
+    notify_pending_users(client, state)
     handle_updates(client, state)
     process_jobs(client, state)
     save_state(state)
@@ -227,14 +239,9 @@ def run_once(client: TelegramClient) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Telegram PDF watermark-removal bot worker")
     parser.add_argument("--token", required=True, help="Telegram bot token")
-    parser.add_argument(
-        "--api-base",
-        default="http://localhost:8081",
-        help="Base URL of local telegram-bot-api server",
-    )
     args = parser.parse_args()
 
-    client = TelegramClient(token=args.token, api_base=args.api_base)
+    client = TelegramClient(token=args.token)
     run_once(client)
     return 0
 
