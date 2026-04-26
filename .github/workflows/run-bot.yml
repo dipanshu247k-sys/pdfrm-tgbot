@@ -1,0 +1,65 @@
+name: Run Telegram PDF Bot
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Start local Telegram Bot API server
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+        run: |
+          set -euo pipefail
+          curl -fsSL -o telegram-bot-api \
+            https://github.com/jakbin/telegram-bot-api-binary/releases/download/latest/telegram-bot-api
+          chmod +x telegram-bot-api
+          nohup ./telegram-bot-api \
+            --api-id="$API_ID" \
+            --api-hash="$API_HASH" \
+            --local \
+            --http-port=8081 > telegram-bot-api.log 2>&1 &
+          for i in {1..30}; do
+            if curl -s http://localhost:8081 >/dev/null; then
+              echo "telegram-bot-api is up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "telegram-bot-api failed to start"
+          cat telegram-bot-api.log || true
+          exit 1
+
+      - name: Run bot once
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          TELEGRAM_API_BASE: ${{ secrets.TELEGRAM_API_BASE }}
+        run: |
+          python bot.py \
+            --token "$BOT_TOKEN" \
+            --api-base "${TELEGRAM_API_BASE:-http://localhost:8081}"
