@@ -30,6 +30,31 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Start local Telegram Bot API server
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+        run: |
+          set -euo pipefail
+          curl -fsSL -o telegram-bot-api \
+            https://github.com/jakbin/telegram-bot-api-binary/releases/download/latest/telegram-bot-api
+          chmod +x telegram-bot-api
+          nohup ./telegram-bot-api \
+            --api-id="$API_ID" \
+            --api-hash="$API_HASH" \
+            --local \
+            --http-port=8081 > telegram-bot-api.log 2>&1 &
+          for i in {1..30}; do
+            if curl -s http://localhost:8081 >/dev/null; then
+              echo "telegram-bot-api is up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "telegram-bot-api failed to start"
+          cat telegram-bot-api.log || true
+          exit 1
+
       - name: Run bot once
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
@@ -37,4 +62,4 @@ jobs:
         run: |
           python bot.py \
             --token "$BOT_TOKEN" \
-            --api-base "${TELEGRAM_API_BASE:-https://api.telegram.org}"
+            --api-base "${TELEGRAM_API_BASE:-http://localhost:8081}"

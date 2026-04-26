@@ -38,7 +38,7 @@ python bot.py --token <BOT_TOKEN> --api-base http://127.0.0.1:8081
 
 Workflow file: `.github/workflows/run-bot.yml`
 
-It runs on `ubuntu-latest` every 10 minutes and executes:
+It runs on `ubuntu-latest` every 10 minutes, starts local `telegram-bot-api` (jakbin binary) on port `8081`, and then executes:
 
 ```bash
 python bot.py --token <BOT_TOKEN> --api-base <TELEGRAM_API_BASE>
@@ -50,9 +50,9 @@ In GitHub repository: **Settings → Secrets and variables → Actions → New r
 
 Create these secrets:
 - `BOT_TOKEN` (required)
-- `API_ID` (optional for this workflow; needed only if you run a local `telegram-bot-api` service)
-- `API_HASH` (optional for this workflow; needed only if you run a local `telegram-bot-api` service)
-- `TELEGRAM_API_BASE` (optional, use `https://api.telegram.org` if not set)
+- `API_ID` (required; used to start `jakbin/telegram-bot-api-binary` in workflow)
+- `API_HASH` (required; used to start `jakbin/telegram-bot-api-binary` in workflow)
+- `TELEGRAM_API_BASE` (optional, defaults to `http://localhost:8081`)
 
 ## Text-based renaming behavior
 

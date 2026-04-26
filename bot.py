@@ -229,7 +229,7 @@ def main() -> int:
     parser.add_argument("--token", required=True, help="Telegram bot token")
     parser.add_argument(
         "--api-base",
-        default="http://127.0.0.1:8081",
+        default="http://localhost:8081",
         help="Base URL of local telegram-bot-api server",
     )
     args = parser.parse_args()
