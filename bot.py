@@ -1,5 +1,6 @@
 import argparse
 import json
+import math
 import re
 import sys
 import time
@@ -153,8 +154,8 @@ def handle_updates(client: TelegramClient, state: dict[str, Any], poll_timeout: 
                 print(f"Failed to download PDF from chat {chat_id}: {exc}", file=sys.stderr)
                 try:
                     client.send_message(chat_id, "Sorry, failed to download your PDF. Please try sending it again.")
-                except Exception:
-                    pass
+                except Exception as notify_exc:
+                    print(f"Failed to notify chat {chat_id} of download error: {notify_exc}", file=sys.stderr)
                 continue
 
             state["jobs"].append(
@@ -217,6 +218,7 @@ def process_jobs(client: TelegramClient, state: dict[str, Any]) -> None:
             )
         except Exception as exc:
             print(f"Unexpected error converting PDF for chat {job['chat_id']}: {exc}", file=sys.stderr)
+            job["error"] = str(exc)
             rc = 1
 
         if rc != 0:
@@ -258,7 +260,7 @@ def run_loop(client: TelegramClient, duration: int = 300) -> None:
         remaining = end_time - time.monotonic()
         if remaining <= 0:
             break
-        poll_timeout = min(10, max(1, int(remaining)))
+        poll_timeout = min(10, max(1, math.ceil(remaining)))
         try:
             handle_updates(client, state, poll_timeout=poll_timeout)
         except Exception as exc:
