@@ -8,7 +8,7 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 9
+    timeout-minutes: 12
     permissions:
       contents: read
     steps:
@@ -55,11 +55,12 @@ jobs:
           cat telegram-bot-api.log || true
           exit 1
 
-      - name: Run bot once
+      - name: Run bot
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           TELEGRAM_API_BASE: ${{ secrets.TELEGRAM_API_BASE }}
         run: |
           python bot.py \
             --token "$BOT_TOKEN" \
-            --api-base "${TELEGRAM_API_BASE:-http://localhost:8081}"
+            --api-base "${TELEGRAM_API_BASE:-http://localhost:8081}" \
+            --duration 300

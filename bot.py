@@ -1,6 +1,8 @@
 import argparse
 import json
 import re
+import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -47,11 +49,12 @@ class TelegramClient:
     def _url(self, method: str) -> str:
         return f"{self.api_base}/bot{self.token}/{method}"
 
-    def get_updates(self, offset: int) -> list[dict[str, Any]]:
+    def get_updates(self, offset: int, poll_timeout: int | None = None) -> list[dict[str, Any]]:
+        pt = poll_timeout if poll_timeout is not None else self.timeout
         response = requests.get(
             self._url("getUpdates"),
-            params={"offset": offset, "timeout": self.timeout, "allowed_updates": ["message"]},
-            timeout=self.timeout + 10,
+            params={"offset": offset, "timeout": pt, "allowed_updates": ["message"]},
+            timeout=pt + 10,
         )
         response.raise_for_status()
         payload = response.json()
@@ -116,8 +119,8 @@ def assign_next_rename(state: dict[str, Any], chat_id: int, text: str) -> bool:
     return False
 
 
-def handle_updates(client: TelegramClient, state: dict[str, Any]) -> None:
-    updates = client.get_updates(state.get("offset", 0))
+def handle_updates(client: TelegramClient, state: dict[str, Any], poll_timeout: int = 30) -> None:
+    updates = client.get_updates(state.get("offset", 0), poll_timeout=poll_timeout)
     if not updates:
         return
 
@@ -140,10 +143,19 @@ def handle_updates(client: TelegramClient, state: dict[str, Any]) -> None:
             if not original_name.lower().endswith(".pdf"):
                 original_name += ".pdf"
 
-            tg_file_path = client.get_file_path(file_id)
             local_name = f"{message.get('message_id', update_id)}_{original_name}"
             local_path = INBOX_DIR / str(chat_id) / local_name
-            client.download_file(tg_file_path, local_path)
+
+            try:
+                tg_file_path = client.get_file_path(file_id)
+                client.download_file(tg_file_path, local_path)
+            except Exception as exc:
+                print(f"Failed to download PDF from chat {chat_id}: {exc}", file=sys.stderr)
+                try:
+                    client.send_message(chat_id, "Sorry, failed to download your PDF. Please try sending it again.")
+                except Exception:
+                    pass
+                continue
 
             state["jobs"].append(
                 {
@@ -182,46 +194,80 @@ def process_jobs(client: TelegramClient, state: dict[str, Any]) -> None:
         if not source_path.exists():
             job["status"] = "failed"
             job["error"] = "Source PDF not found on disk"
+            try:
+                client.send_message(
+                    job["chat_id"],
+                    "Sorry, your PDF could not be found. Please send it again.",
+                )
+            except Exception as exc:
+                print(f"Failed to notify chat {job['chat_id']} of missing PDF: {exc}", file=sys.stderr)
             continue
 
         raw_name = job.get("rename_text") or Path(job["source_name"]).stem
         output_name = f"{sanitize_name(raw_name, 'output')}.pdf"
         output_path = OUTBOX_DIR / str(job["chat_id"]) / output_name
 
-        rc = convert_pdf(
-            source_pdf=source_path,
-            output_pdf=output_path,
-            script_dir=TOOLS_DIR,
-            pdfimages_bin=pdfimages_bin,
-            watermark_image=None,
-        )
+        try:
+            rc = convert_pdf(
+                source_pdf=source_path,
+                output_pdf=output_path,
+                script_dir=TOOLS_DIR,
+                pdfimages_bin=pdfimages_bin,
+                watermark_image=None,
+            )
+        except Exception as exc:
+            print(f"Unexpected error converting PDF for chat {job['chat_id']}: {exc}", file=sys.stderr)
+            rc = 1
+
         if rc != 0:
             attempts = int(job.get("attempts", 0)) + 1
             job["attempts"] = attempts
             job["error"] = f"convert_pdf failed with exit code {rc}"
             if attempts >= 3:
                 job["status"] = "failed"
-                client.send_message(
-                    job["chat_id"],
-                    "Failed to process PDF after multiple retries. Please resend the file.",
-                )
+                try:
+                    client.send_message(
+                        job["chat_id"],
+                        "Failed to process PDF after multiple retries. Please resend the file.",
+                    )
+                except Exception as exc:
+                    print(f"Failed to notify chat {job['chat_id']}: {exc}", file=sys.stderr)
             else:
                 job["status"] = "pending"
-                client.send_message(job["chat_id"], "Failed to process PDF. It will be retried next run.")
+                try:
+                    client.send_message(job["chat_id"], "Failed to process PDF. It will be retried next run.")
+                except Exception as exc:
+                    print(f"Failed to notify chat {job['chat_id']}: {exc}", file=sys.stderr)
             continue
 
-        client.send_document(job["chat_id"], output_path, caption="Processed PDF")
-        job["status"] = "done"
-        job["error"] = None
+        try:
+            client.send_document(job["chat_id"], output_path, caption="Processed PDF")
+            job["status"] = "done"
+            job["error"] = None
+        except Exception as exc:
+            print(f"Failed to send processed PDF to chat {job['chat_id']}: {exc}", file=sys.stderr)
+            job["error"] = str(exc)
 
     state["jobs"] = state["jobs"][-500:]
 
 
-def run_once(client: TelegramClient) -> None:
+def run_loop(client: TelegramClient, duration: int = 300) -> None:
     state = load_state()
-    handle_updates(client, state)
-    process_jobs(client, state)
-    save_state(state)
+    end_time = time.monotonic() + duration
+    while True:
+        remaining = end_time - time.monotonic()
+        if remaining <= 0:
+            break
+        poll_timeout = min(10, max(1, int(remaining)))
+        try:
+            handle_updates(client, state, poll_timeout=poll_timeout)
+        except Exception as exc:
+            print(f"Error fetching updates: {exc}", file=sys.stderr)
+        try:
+            process_jobs(client, state)
+        except Exception as exc:
+            print(f"Error processing jobs: {exc}", file=sys.stderr)
+        save_state(state)
 
 
 def main() -> int:
@@ -232,10 +278,16 @@ def main() -> int:
         default="http://localhost:8081",
         help="Base URL of local telegram-bot-api server",
     )
+    parser.add_argument(
+        "--duration",
+        type=int,
+        default=300,
+        help="How long (in seconds) to keep polling for updates (default: 300)",
+    )
     args = parser.parse_args()
 
     client = TelegramClient(token=args.token, api_base=args.api_base)
-    run_once(client)
+    run_loop(client, duration=args.duration)
     return 0
 
 
