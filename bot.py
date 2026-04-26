@@ -1,7 +1,9 @@
 import argparse
 import json
 import math
+import os
 import re
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -76,11 +78,19 @@ class TelegramClient:
         return payload["result"]["file_path"]
 
     def download_file(self, tg_file_path: str, destination: Path) -> None:
-        file_url = f"{self.api_base}/file/bot{self.token}/{tg_file_path}"
-        response = requests.get(file_url, timeout=self.timeout + 20)
-        response.raise_for_status()
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(response.content)
+        if os.path.isabs(tg_file_path):
+            # Local Bot API server (--local mode) returns absolute filesystem paths.
+            # Copy the file directly instead of fetching via HTTP.
+            src = Path(tg_file_path)
+            if not src.is_file():
+                raise FileNotFoundError(f"Local API returned path that does not exist: {tg_file_path}")
+            shutil.copy2(src, destination)
+        else:
+            file_url = f"{self.api_base}/file/bot{self.token}/{tg_file_path}"
+            response = requests.get(file_url, timeout=self.timeout + 20)
+            response.raise_for_status()
+            destination.write_bytes(response.content)
 
     def send_message(self, chat_id: int, text: str) -> None:
         requests.post(
