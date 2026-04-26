@@ -30,20 +30,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Start local Telegram Bot API server
+      - name: Start local Telegram Bot API server (Docker)
         env:
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
         run: |
           set -euo pipefail
-          curl -fsSL -o telegram-bot-api \
-            https://github.com/jakbin/telegram-bot-api-binary/releases/download/latest/telegram-bot-api
-          chmod +x telegram-bot-api
-          nohup ./telegram-bot-api \
-            --api-id="$API_ID" \
-            --api-hash="$API_HASH" \
-            --local \
-            --http-port=8081 > telegram-bot-api.log 2>&1 &
+          docker pull ghcr.io/jakbin/telegram-bot-api-binary:main
+          docker run -d --name telegram-bot-api \
+            -p 8081:8081 \
+            -e API_ID="$API_ID" \
+            -e API_HASH="$API_HASH" \
+            ghcr.io/jakbin/telegram-bot-api-binary:main
           for i in {1..30}; do
             if curl -s http://localhost:8081 >/dev/null; then
               echo "telegram-bot-api is up"
@@ -52,14 +50,11 @@ jobs:
             sleep 1
           done
           echo "telegram-bot-api failed to start"
-          cat telegram-bot-api.log || true
+          docker logs telegram-bot-api || true
           exit 1
 
       - name: Run bot once
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          TELEGRAM_API_BASE: ${{ secrets.TELEGRAM_API_BASE }}
         run: |
-          python bot.py \
-            --token "$BOT_TOKEN" \
-            --api-base "${TELEGRAM_API_BASE:-http://localhost:8081}"
+          python bot.py --token "$BOT_TOKEN"
