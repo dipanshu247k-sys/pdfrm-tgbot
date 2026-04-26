@@ -122,10 +122,14 @@ def convert_pdf(
             subprocess.run(
                 [str(pdfimages_bin), "-j", str(source_pdf), str(out_prefix)],
                 check=True,
+                capture_output=True,
+                text=True,
             )
         except subprocess.CalledProcessError as exc:
+            stderr_text = (exc.stderr or "").strip()
             print(
-                f"pdfimages failed for {source_pdf} with exit code {exc.returncode}",
+                f"pdfimages failed for {source_pdf} with exit code {exc.returncode}"
+                + (f": {stderr_text}" if stderr_text else ""),
                 file=sys.stderr,
             )
             return 1

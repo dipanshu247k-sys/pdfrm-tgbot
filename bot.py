@@ -197,10 +197,8 @@ def process_jobs(client: TelegramClient, state: dict[str, Any]) -> None:
             watermark_image=None,
         )
         if rc != 0:
-            job["status"] = "failed"
             job["error"] = f"convert_pdf failed with exit code {rc}"
             client.send_message(job["chat_id"], "Failed to process PDF. It will be retried next run.")
-            job["status"] = "pending"
             continue
 
         client.send_document(job["chat_id"], output_path, caption="Processed PDF")
@@ -231,7 +229,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.min_sleep <= 0 or args.max_sleep < args.min_sleep:
-        raise SystemExit("Invalid sleep window")
+        raise SystemExit("Sleep window must be positive and max-sleep must be >= min-sleep.")
 
     client = TelegramClient(token=args.token, api_base=args.api_base)
 
@@ -243,6 +241,7 @@ def main() -> int:
         run_once(client)
         sleep_seconds = random.randint(args.min_sleep, args.max_sleep)
         time.sleep(sleep_seconds)
+    return 0
 
 
 if __name__ == "__main__":
