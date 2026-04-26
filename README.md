@@ -50,8 +50,8 @@ In GitHub repository: **Settings → Secrets and variables → Actions → New r
 
 Create these secrets:
 - `BOT_TOKEN` (required)
-- `API_ID` (required by your Telegram app setup)
-- `API_HASH` (required by your Telegram app setup)
+- `API_ID` (optional for this workflow; needed only if you run a local `telegram-bot-api` service)
+- `API_HASH` (optional for this workflow; needed only if you run a local `telegram-bot-api` service)
 - `TELEGRAM_API_BASE` (optional, use `https://api.telegram.org` if not set)
 
 ## Text-based renaming behavior
