@@ -197,6 +197,7 @@ def process_jobs(client: TelegramClient, state: dict[str, Any]) -> None:
             watermark_image=None,
         )
         if rc != 0:
+            job["status"] = "pending"
             job["error"] = f"convert_pdf failed with exit code {rc}"
             client.send_message(job["chat_id"], "Failed to process PDF. It will be retried next run.")
             continue
@@ -237,11 +238,13 @@ def main() -> int:
         run_once(client)
         return 0
 
-    while True:
-        run_once(client)
-        sleep_seconds = random.randint(args.min_sleep, args.max_sleep)
-        time.sleep(sleep_seconds)
-    return 0
+    try:
+        while True:
+            run_once(client)
+            sleep_seconds = random.randint(args.min_sleep, args.max_sleep)
+            time.sleep(sleep_seconds)
+    except KeyboardInterrupt:
+        return 0
 
 
 if __name__ == "__main__":
