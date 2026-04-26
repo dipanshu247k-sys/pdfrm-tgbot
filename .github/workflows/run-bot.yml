@@ -1,0 +1,40 @@
+name: Run Telegram PDF Bot
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run bot once
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          TELEGRAM_API_BASE: ${{ secrets.TELEGRAM_API_BASE }}
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+        run: |
+          python bot.py \
+            --token "$BOT_TOKEN" \
+            --api-base "${TELEGRAM_API_BASE:-https://api.telegram.org}"

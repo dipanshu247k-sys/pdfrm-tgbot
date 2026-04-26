@@ -1,8 +1,6 @@
 import argparse
 import json
-import random
 import re
-import time
 from pathlib import Path
 from typing import Any
 
@@ -234,27 +232,11 @@ def main() -> int:
         default="http://127.0.0.1:8081",
         help="Base URL of local telegram-bot-api server",
     )
-    parser.add_argument("--loop", action="store_true", help="Run forever with random sleep between cycles")
-    parser.add_argument("--min-sleep", type=int, default=300, help="Minimum sleep in seconds")
-    parser.add_argument("--max-sleep", type=int, default=900, help="Maximum sleep in seconds")
     args = parser.parse_args()
 
-    if args.min_sleep <= 0 or args.max_sleep < args.min_sleep:
-        raise SystemExit("Sleep window must be positive and --max-sleep must be >= --min-sleep.")
-
     client = TelegramClient(token=args.token, api_base=args.api_base)
-
-    if not args.loop:
-        run_once(client)
-        return 0
-
-    try:
-        while True:
-            run_once(client)
-            sleep_seconds = random.randint(args.min_sleep, args.max_sleep)
-            time.sleep(sleep_seconds)
-    except KeyboardInterrupt:
-        return 0
+    run_once(client)
+    return 0
 
 
 if __name__ == "__main__":
