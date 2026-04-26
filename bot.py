@@ -155,6 +155,7 @@ def handle_updates(client: TelegramClient, state: dict[str, Any]) -> None:
                     "source_path": str(local_path),
                     "rename_text": None,
                     "status": "pending",
+                    "attempts": 0,
                     "error": None,
                 }
             )
@@ -197,13 +198,23 @@ def process_jobs(client: TelegramClient, state: dict[str, Any]) -> None:
             watermark_image=None,
         )
         if rc != 0:
-            job["status"] = "pending"
+            attempts = int(job.get("attempts", 0)) + 1
+            job["attempts"] = attempts
             job["error"] = f"convert_pdf failed with exit code {rc}"
-            client.send_message(job["chat_id"], "Failed to process PDF. It will be retried next run.")
+            if attempts >= 3:
+                job["status"] = "failed"
+                client.send_message(
+                    job["chat_id"],
+                    "Failed to process PDF after multiple retries. Please resend the file.",
+                )
+            else:
+                job["status"] = "pending"
+                client.send_message(job["chat_id"], "Failed to process PDF. It will be retried next run.")
             continue
 
         client.send_document(job["chat_id"], output_path, caption="Processed PDF")
         job["status"] = "done"
+        job["attempts"] = int(job.get("attempts", 0))
         job["error"] = None
 
     state["jobs"] = state["jobs"][-500:]
@@ -230,7 +241,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.min_sleep <= 0 or args.max_sleep < args.min_sleep:
-        raise SystemExit("Sleep window must be positive and max-sleep must be >= min-sleep.")
+        raise SystemExit("Sleep window must be positive and --max-sleep must be >= --min-sleep.")
 
     client = TelegramClient(token=args.token, api_base=args.api_base)
 
